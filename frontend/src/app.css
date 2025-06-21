@@ -1,0 +1,147 @@
+/* App.css */
+
+.app {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .app-title {
+    font-size: 28px;
+    color: #333;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  
+  .step-container {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  .step-title {
+    font-size: 22px;
+    margin-bottom: 15px;
+    color: #2c3e50;
+  }
+  
+  .input-label {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 10px;
+    display: block;
+  }
+  
+  .text-input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  
+  .dropdown {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+  }
+  
+  .button {
+    background: #3498db;
+    color: #fff;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 15px;
+  }
+  
+  .button:hover {
+    background: #2980b9;
+  }
+  
+  .overview {
+    font-size: 16px;
+    color: #34495e;
+    margin-bottom: 15px;
+  }
+  
+  .question-container {
+    margin-bottom: 15px;
+  }
+  
+  .question-text {
+    font-size: 16px;
+    color: #333;
+  }
+  
+  .option-label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #555;
+  }
+  
+  .radio-input {
+    margin-right: 10px;
+  }
+  
+  .result-text {
+    font-size: 16px;
+    color: #2c3e50;
+  }
+  
+  .modules-title {
+    font-size: 18px;
+    margin-top: 20px;
+    color: #333;
+  }
+  
+  .module-list {
+    list-style: none;
+    padding: 0;
+  }
+  
+  .module-item {
+    padding: 10px;
+    margin-bottom: 15px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  
+  .module-title {
+    font-size: 16px;
+    color: #2980b9;
+  }
+  
+  .module-description {
+    font-size: 14px;
+    color: #555;
+    margin-bottom: 10px;
+  }
+  
+  .resource-list {
+    list-style: none;
+    padding: 0;
+  }
+  
+  .resource-item {
+    margin-bottom: 5px;
+  }
+  
+  .resource-link {
+    color: #3498db;
+    text-decoration: none;
+  }
+  
+  .resource-link:hover {
+    text-decoration: underline;
+  }
