@@ -179,7 +179,7 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
         Please provide a detailed, actionable learning path for achieving the objective.
         
         sample - 
-        {"learningPath": {
+        { "learningPath": {
             "objective": "Learn React",
             "knowledgeLevel": "Intermediate",
             "modules": [
@@ -211,12 +211,13 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
       .replace(/```json/, "")
       .replace(/```/, "")
       .trim();
+    learfningpathjson = JSON.parse(learningPath);
 
     // Return evaluated knowledge and learning path
     res.json({
       score,
       knowledgeLevel,
-      learningPath,
+      learfningpathjson,
     });
   } catch (error) {
     console.error(
