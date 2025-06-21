@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import "./App.css"; // Import external CSS
+import "./app.css"; // Import external CSS
 
 function App() {
   const [step, setStep] = useState(1); // Track user steps
