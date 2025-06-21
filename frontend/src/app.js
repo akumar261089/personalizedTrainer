@@ -2,41 +2,45 @@ import React, { useState } from "react";
 import axios from "axios";
 
 function App() {
-  const [step, setStep] = useState(1); // To track user flow
-  const [topic, setTopic] = useState("react");
-  const [purpose, setPurpose] = useState("");
-  const [overview, setOverview] = useState("");
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState([]);
-  const [result, setResult] = useState(null);
+  const [step, setStep] = useState(1); // Track user steps
+  const [topic, setTopic] = useState("react"); // Set default topic
+  const [purpose, setPurpose] = useState(""); // User learning purpose
+  const [overview, setOverview] = useState(""); // Topic overview text
+  const [questions, setQuestions] = useState([]); // Questions from backend
+  const [answers, setAnswers] = useState([]); // User's answers to questions
+  const [result, setResult] = useState(null); // Final results and learning path
 
+  // Submit learning request to backend
   const submitLearningRequest = async () => {
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/submitLearningRequest",
+        "http://135.13.8.201:5001/api/submitLearningRequest",
         {
-          topic,
-          learningPurpose: purpose,
+          topic, // Topic selected by user
+          learningPurpose: purpose, // Purpose input by user
         }
       );
-      setOverview(response.data.overview);
-      setQuestions(response.data.questions);
-      setStep(2); // Move to the test step
+      setOverview(response.data.overview); // Set overview text
+      setQuestions(response.data.questions); // Set questions array
+      setStep(2); // Move to next step (quiz)
     } catch (error) {
       console.error("Error fetching learning data:", error);
     }
   };
 
+  // Submit user's answers to backend
   const submitAnswers = async () => {
     try {
       const response = await axios.post(
-        "http://localhost:5000/api/evaluateKnowledge",
+        "http://135.13.8.201:5001/api/evaluateKnowledge",
         {
-          answers,
-          topic,
+          answers, // User's answers sent to backend
+          questions,
+          learningPurpose,
+          topic, // Pass the topic for contextual evaluation
         }
       );
-      setResult(response.data);
+      setResult(response.data); // Store result state
       setStep(3); // Move to result step
     } catch (error) {
       console.error("Error submitting answers:", error);
