@@ -36,7 +36,7 @@ function App() {
         {
           answers, // User's answers sent to backend
           questions,
-          learningPurpose,
+          purpose,
           topic, // Pass the topic for contextual evaluation
         }
       );
