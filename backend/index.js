@@ -212,6 +212,7 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
       .replace(/```/, "")
       .trim();
     learfningpathjson = JSON.parse(learningPath);
+    console.log("Learning Path Response Data:", learfningpathjson);
 
     // Return evaluated knowledge and learning path
     res.json({
