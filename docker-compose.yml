@@ -5,7 +5,7 @@ services:
     build:
       context: ./backend
     ports:
-      - "5000:5000" # Maps backend port 5000 inside the container to port 5000 on the host
+      - "5001:5000" # Maps backend port 5000 inside the container to port 5000 on the host
     environment:
       - AZURE_OPENAI_API_KEY=ff1cd87da4ba4304986e9bf652498906 # Make sure to pass your API key
       - AZURE_OPENAI_ENDPOINT=https://bh-in-openai-synapsesynergy.openai.azure.com/
@@ -18,7 +18,7 @@ services:
     build:
       context: ./frontend
     ports:
-      - "3000:80" # Maps frontend port 80 inside the container to port 3000 on the host
+      - "3001:80" # Maps frontend port 80 inside the container to port 3000 on the host
     container_name: learning_frontend
     restart: always
     networks:
