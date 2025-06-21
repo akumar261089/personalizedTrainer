@@ -176,7 +176,19 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
           )
           .join("\n")}
         The user's knowledge level is determined to be: ${knowledgeLevel}.
-        Please provide a detailed, actionable learning path for achieving the objective.`,
+        Please provide a detailed, actionable learning path for achieving the objective.
+        
+        sample - 
+        {"learningPath": {
+            "objective": "Learn React",
+            "knowledgeLevel": "Intermediate",
+            "modules": [
+                    {"title": "React Basics", "description": "Learn the fundamentals of React, including components, state, and props.", "resources": ["https://reactjs.org/docs/getting-started.html", "https://www.freecodecamp.org/learn/front-end-development-libraries/#react"]},
+                    {"title": "Advanced React", "description": "Dive deeper into React with hooks, context, and performance optimization.", "resources": ["https://reactjs.org/docs/hooks-intro.html", "https://kentcdodds.com/blog/advanced-react-hooks"]},
+                ]
+            }
+        }
+        `,
       },
     ];
 
@@ -195,8 +207,10 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
       }
     );
 
-    const learningPath =
-      learningPathResponse.data.choices[0].message.content.trim();
+    const learningPath = learningPathResponse.data.choices[0].message.content
+      .replace(/```json/, "")
+      .replace(/```/, "")
+      .trim();
 
     // Return evaluated knowledge and learning path
     res.json({

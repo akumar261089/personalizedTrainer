@@ -41,6 +41,7 @@ function App() {
         }
       );
       setResult(response.data); // Store result state
+      console.log("Result:", response.data);
       setStep(3); // Move to result step
     } catch (error) {
       console.error("Error submitting answers:", error);
@@ -109,15 +110,34 @@ function App() {
         <>
           <h2>Step 3: Your Learning Path</h2>
           <p>
-            <b>Score:</b> {result.score}
+            <b>Learning Objective:</b> {result.learningPath?.objective}
           </p>
           <p>
-            <b>Knowledge Level:</b> {result.knowledgeLevel}
+            <b>Knowledge Level:</b> {result.learningPath?.knowledgeLevel}
           </p>
-          <h3>Recommended Learning Path:</h3>
+          <h3>Modules:</h3>
           <ul>
-            {result.learningPath.map((item, index) => (
-              <li key={index}>{item}</li>
+            {result.learningPath?.modules?.map((module, index) => (
+              <li key={index}>
+                <h4>{module.title}</h4>
+                <p>{module.description}</p>
+                <p>
+                  <b>Resources:</b>
+                  <ul>
+                    {module.resources.map((resource, i) => (
+                      <li key={i}>
+                        <a
+                          href={resource}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {resource}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </p>
+              </li>
             ))}
           </ul>
         </>
