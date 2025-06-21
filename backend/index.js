@@ -196,7 +196,6 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
       `${AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o/chat/completions?api-version=2024-12-01-preview`,
       {
         messages: learningPathMessages,
-        max_tokens: 500,
         temperature: 0.7,
       },
       {
