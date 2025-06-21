@@ -110,18 +110,20 @@ function App() {
         <>
           <h2>Step 3: Your Learning Path</h2>
           <p>
-            <b>Learning Objective:</b> {result.learningPath?.objective}
+            <b>Learning Score:</b> {result.score}
           </p>
           <p>
-            <b>Knowledge Level:</b> {result.learningPath?.knowledgeLevel}
+            <b>Knowledge Level:</b> {result.knowledgeLevel}
           </p>
           <h3>Modules:</h3>
           <ul>
-            {result.learningPath?.modules?.map((module, index) => (
-              <li key={index}>
-                <p>{module.title}</p>
-              </li>
-            ))}
+            {result.learfningpathjson.learningPath?.modules?.map(
+              (module, index) => (
+                <li key={index}>
+                  <p>{module.title}</p>
+                </li>
+              )
+            )}
           </ul>
         </>
       )}
