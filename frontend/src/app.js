@@ -127,30 +127,32 @@ function App() {
             <b>Learning Score:</b> {result.score}
           </p>
           <p className="result-text">
-            <b>Knowledge Level:</b> {result.learningPath?.knowledgeLevel}
+            <b>Knowledge Level:</b> {result.knowledgeLevel}
           </p>
           <h3 className="modules-title">Modules:</h3>
           <ul className="module-list">
-            {result.learningPath?.modules?.map((module, index) => (
-              <li key={index} className="module-item">
-                <h4 className="module-title">{module.title}</h4>
-                <p className="module-description">{module.description}</p>
-                <ul className="resource-list">
-                  {module.resources.map((resource, i) => (
-                    <li key={i} className="resource-item">
-                      <a
-                        href={resource}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="resource-link"
-                      >
-                        {resource}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
+            {result.learfningpathjson.learningPath?.modules?.map(
+              (module, index) => (
+                <li key={index} className="module-item">
+                  <h4 className="module-title">{module.title}</h4>
+                  <p className="module-description">{module.description}</p>
+                  <ul className="resource-list">
+                    {module.resources.map((resource, i) => (
+                      <li key={i} className="resource-item">
+                        <a
+                          href={resource}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="resource-link"
+                        >
+                          {resource}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              )
+            )}
           </ul>
         </div>
       )}
