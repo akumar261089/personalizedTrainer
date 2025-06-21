@@ -119,24 +119,7 @@ function App() {
           <ul>
             {result.learningPath?.modules?.map((module, index) => (
               <li key={index}>
-                <h4>{module.title}</h4>
-                <p>{module.description}</p>
-                <p>
-                  <b>Resources:</b>
-                  <ul>
-                    {module.resources.map((resource, i) => (
-                      <li key={i}>
-                        <a
-                          href={resource}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {resource}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </p>
+                <p>{module.title}</p>
               </li>
             ))}
           </ul>

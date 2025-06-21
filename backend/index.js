@@ -183,8 +183,8 @@ app.post("/api/evaluateKnowledge", async (req, res) => {
             "objective": "Learn React",
             "knowledgeLevel": "Intermediate",
             "modules": [
-                    {"title": "React Basics", "description": "Learn the fundamentals of React, including components, state, and props.", "resources": ["https://reactjs.org/docs/getting-started.html", "https://www.freecodecamp.org/learn/front-end-development-libraries/#react"]},
-                    {"title": "Advanced React", "description": "Dive deeper into React with hooks, context, and performance optimization.", "resources": ["https://reactjs.org/docs/hooks-intro.html", "https://kentcdodds.com/blog/advanced-react-hooks"]},
+                    {"title": "React Basics"},
+                    {"title": "Advanced React"},
                 ]
             }
         }
