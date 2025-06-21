@@ -36,8 +36,9 @@ function App() {
         "http://135.13.8.201:5001/api/evaluateKnowledge",
         {
           answers,
-          topic,
+          questions,
           purpose,
+          topic,
         }
       );
       setResult(response.data); // Store result data (learning path, etc.)
