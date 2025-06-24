@@ -137,16 +137,9 @@ function App() {
                   <h4 className="module-title">{module.title}</h4>
                   <p className="module-description">{module.description}</p>
                   <ul className="resource-list">
-                    {module.resources.map((resource, i) => (
+                    {module.activities.map((activity, i) => (
                       <li key={i} className="resource-item">
-                        <a
-                          href={resource}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="resource-link"
-                        >
-                          {resource}
-                        </a>
+                        <span className="resource-link">{activity}</span>
                       </li>
                     ))}
                   </ul>

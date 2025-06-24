@@ -2,238 +2,493 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const axios = require("axios");
-require("dotenv").config(); // For loading environment variables
+const fs = require("fs").promises;
+const path = require("path");
+const winston = require("winston");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const { body, validationResult } = require("express-validator");
+require("dotenv").config();
+
+// Initialize logger
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  defaultMeta: { service: "learning-api" },
+  transports: [
+    new winston.transports.File({ filename: "logs/error.log", level: "error" }),
+    new winston.transports.File({ filename: "logs/combined.log" }),
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    }),
+  ],
+});
+
+// Configuration
+const config = {
+  port: process.env.PORT || 5000,
+  azureOpenAI: {
+    endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+    apiKey: process.env.AZURE_OPENAI_API_KEY,
+    deploymentName: process.env.AZURE_OPENAI_DEPLOYMENT || "gpt-4o",
+    apiVersion: process.env.AZURE_OPENAI_API_VERSION || "2024-12-01-preview",
+  },
+  maxTokens: {
+    overview: parseInt(process.env.MAX_TOKENS_OVERVIEW) || 200,
+    questions: parseInt(process.env.MAX_TOKENS_QUESTIONS) || 500,
+    learningPath: parseInt(process.env.MAX_TOKENS_LEARNING_PATH) || 1000,
+  },
+};
+
+// Validate required environment variables
+const requiredEnvVars = ["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY"];
+const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
+
+if (missingEnvVars.length > 0) {
+  logger.error(
+    `Missing required environment variables: ${missingEnvVars.join(", ")}`
+  );
+  process.exit(1);
+}
 
 const app = express();
-const PORT = 5000;
 
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
+// Security middleware
+app.use(helmet());
 
-// Load environment variables (Azure OpenAI API details)
-const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT; // e.g., https://your-openai-instance.openai.azure.com
-const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY;
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(limiter);
 
-// GPT-4 prompt templates
-const generateOverviewPrompt = (topic, purpose) =>
-  `Explain briefly what ${topic} is and why it is useful. Consider the user wants to learn for ${purpose}. Limit the response to 200 words.`;
+// CORS configuration
+const corsOptions = {
+  origin: process.env.ALLOWED_ORIGINS?.split(",") || ["http://localhost:3000"],
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
 
-const generateQuestionsPrompt = (topic) =>
-  `Generate 3 beginner-level multiple-choice questions about ${topic}.
-  Each question should include 4 choices, with the correct choice explicitly labeled in the response. Format it as JSON:
-  [
-    {
-      "question": "Question text",
-      "options": ["choice1", "choice2", "choice3", "choice4"],
-      "correct": "choiceX"
-    }
-  ]`;
+// Body parser middleware
+app.use(bodyParser.json({ limit: "10mb" }));
+app.use(bodyParser.urlencoded({ extended: true, limit: "10mb" }));
 
-// -------------------------------------
-// Submit Learning Request (Overview + Questions)
-// -------------------------------------
-app.post("/api/submitLearningRequest", async (req, res) => {
-  const { topic, learningPurpose } = req.body;
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get("User-Agent"),
+    body: req.method === "POST" ? req.body : undefined,
+  });
+  next();
+});
 
-  try {
-    // Generate topic overview
-    const overviewMessages = [
-      { role: "system", content: "You are a helpful assistant." },
-      { role: "user", content: generateOverviewPrompt(topic, learningPurpose) },
-    ];
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
 
-    const overviewResponse = await axios.post(
-      `${AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o/chat/completions?api-version=2024-12-01-preview`,
-      {
-        messages: overviewMessages,
-        max_tokens: 150,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": AZURE_OPENAI_API_KEY,
-        },
-      }
-    );
+// Utility functions
+class OpenAIService {
+  constructor() {
+    this.endpoint = config.azureOpenAI.endpoint;
+    this.apiKey = config.azureOpenAI.apiKey;
+    this.deploymentName = config.azureOpenAI.deploymentName;
+    this.apiVersion = config.azureOpenAI.apiVersion;
+  }
 
-    const overview = overviewResponse.data.choices[0].message.content.trim();
+  async makeRequest(messages, maxTokens = 500, temperature = 0.7) {
+    const url = `${this.endpoint}/openai/deployments/${this.deploymentName}/chat/completions?api-version=${this.apiVersion}`;
 
-    // Generate topic questions
-    const questionsMessages = [
-      {
-        role: "system",
-        content:
-          "You are a helpful assistant and an expert learning path planner. Respond only in JSON format.",
-      },
-      { role: "user", content: generateQuestionsPrompt(topic) },
-    ];
-
-    const questionsResponse = await axios.post(
-      `${AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o/chat/completions?api-version=2024-12-01-preview`,
-      {
-        messages: questionsMessages,
-        max_tokens: 300,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": AZURE_OPENAI_API_KEY,
-        },
-      }
-    );
-
-    const fs = require("fs"); // For file handling
-
-    // Log questions response and save to a file
-    console.log(
-      "Questions Response Data:",
-      questionsResponse.data.choices[0].message.content
-    );
-
-    let questions;
     try {
-      const rawContent =
-        questionsResponse.data.choices[0].message.content.trim();
-      fs.writeFileSync("questions_response_raw.txt", rawContent, "utf-8");
-      // Remove any unwanted formatting (e.g., "json\n", Markdown-style code blocks)
-      const cleanedContent = rawContent
-        .replace(/```json/, "") // Remove starting ```json
-        .replace(/```/, "") // Remove ending ```
-        .trim(); // Trim whitespace
-      // Parse cleaned content
-      questions = JSON.parse(cleanedContent);
-    } catch (parseError) {
-      console.error(
-        "Error parsing questions JSON:",
-        parseError.message || parseError
+      const response = await axios.post(
+        url,
+        {
+          messages,
+          max_tokens: maxTokens,
+          temperature,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "api-key": this.apiKey,
+          },
+          timeout: 30000, // 30 second timeout
+        }
       );
-      fs.writeFileSync(
-        "questions_parsing_error.txt",
-        parseError.message,
-        "utf-8"
-      );
-      return res.status(500).json({
-        message: "Error parsing questions response",
-        error: parseError.message,
+
+      return response.data.choices[0].message.content.trim();
+    } catch (error) {
+      logger.error("Azure OpenAI API request failed", {
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      throw new Error(`OpenAI API request failed: ${error.message}`);
+    }
+  }
+
+  generateOverviewPrompt(topic, purpose) {
+    return `Explain briefly what ${topic} is and why it is useful. Consider the user wants to learn for ${purpose}. Limit the response to 200 words.`;
+  }
+
+  generateQuestionsPrompt(topic) {
+    return `Generate 3 beginner-level multiple-choice questions about ${topic}.
+    Each question should include 4 choices, with the correct choice explicitly labeled in the response. Format it as JSON:
+    [
+      {
+        "question": "Question text",
+        "options": ["choice1", "choice2", "choice3", "choice4"],
+        "correct": "choiceX"
+      }
+    ]`;
+  }
+
+  generateLearningPathPrompt(
+    topic,
+    purpose,
+    questions,
+    answers,
+    knowledgeLevel
+  ) {
+    const questionSummary = questions
+      .map(
+        (q, index) =>
+          `Q${index + 1}: ${q.question}\nAnswer: ${
+            answers[index]
+          }\nCorrect Answer: ${q.correct}\n`
+      )
+      .join("\n");
+
+    return `The user is learning about ${topic} with the objective: ${purpose}.
+    The user answered the following questions:
+    ${questionSummary}
+    The user's knowledge level is determined to be: ${knowledgeLevel}.
+    Please provide a detailed, actionable learning path for achieving the objective.
+    
+    Respond in JSON format:
+    {
+      "learningPath": {
+        "objective": "Learn ${topic}",
+        "knowledgeLevel": "${knowledgeLevel}",
+        "modules": [
+          {"title": "Module Title", "description": "Module description", "estimatedTime": "X hours"},
+        ]
+      }
+    }`;
+  }
+}
+
+// Utility function to clean and parse JSON
+function cleanAndParseJSON(content) {
+  try {
+    const cleanedContent = content
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+    return JSON.parse(cleanedContent);
+  } catch (error) {
+    logger.error("JSON parsing failed", { content, error: error.message });
+    throw new Error("Failed to parse JSON response");
+  }
+}
+
+// Error handling middleware
+const asyncHandler = (fn) => (req, res, next) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
+
+// Validation middleware
+const validateLearningRequest = [
+  body("topic")
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Topic must be between 2 and 100 characters"),
+  body("learningPurpose")
+    .trim()
+    .isLength({ min: 5, max: 500 })
+    .withMessage("Learning purpose must be between 5 and 500 characters"),
+];
+
+const validateKnowledgeEvaluation = [
+  body("answers")
+    .isArray({ min: 1, max: 10 })
+    .withMessage("Answers must be an array with 1-10 elements"),
+  body("questions")
+    .isArray({ min: 1, max: 10 })
+    .withMessage("Questions must be an array with 1-10 elements"),
+  body("purpose")
+    .trim()
+    .isLength({ min: 5, max: 500 })
+    .withMessage("Purpose must be between 5 and 500 characters"),
+  body("topic")
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Topic must be between 2 and 100 characters"),
+];
+
+const openAIService = new OpenAIService();
+
+// Routes
+app.post(
+  "/api/submitLearningRequest",
+  validateLearningRequest,
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
       });
     }
 
-    // Return generated overview and questions
-    res.json({
-      overview,
-      questions,
-    });
-  } catch (error) {
-    console.error(
-      "Error communicating with Azure OpenAI:",
-      error.message || error.response?.data
-    );
-    res.status(500).json({
-      message: "Error generating content",
-      error: error.message || error.response?.data,
-    });
-  }
-});
+    const { topic, learningPurpose } = req.body;
+    const requestId = Date.now().toString();
 
-// -------------------------------------
-// Evaluate Knowledge + Generate Learning Path
-// -------------------------------------
-app.post("/api/evaluateKnowledge", async (req, res) => {
-  const { answers, questions, purpose, topic } = req.body;
+    logger.info("Processing learning request", {
+      requestId,
+      topic,
+      learningPurpose,
+    });
 
-  // Evaluate score
-  let score = 0;
-  questions.forEach((q, index) => {
-    if (answers[index] === q.correct) {
-      score++;
+    try {
+      // Generate topic overview
+      const overviewMessages = [
+        { role: "system", content: "You are a helpful assistant." },
+        {
+          role: "user",
+          content: openAIService.generateOverviewPrompt(topic, learningPurpose),
+        },
+      ];
+
+      const overview = await openAIService.makeRequest(
+        overviewMessages,
+        config.maxTokens.overview
+      );
+
+      // Generate topic questions
+      const questionsMessages = [
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant and an expert learning path planner. Respond only in JSON format.",
+        },
+        { role: "user", content: openAIService.generateQuestionsPrompt(topic) },
+      ];
+
+      const questionsResponse = await openAIService.makeRequest(
+        questionsMessages,
+        config.maxTokens.questions
+      );
+
+      const questions = cleanAndParseJSON(questionsResponse);
+
+      // Save response for debugging (optional)
+      if (process.env.NODE_ENV === "development") {
+        await fs.mkdir("logs", { recursive: true });
+        await fs.writeFile(
+          path.join("logs", `questions_${requestId}.json`),
+          JSON.stringify(questions, null, 2)
+        );
+      }
+
+      logger.info("Learning request processed successfully", { requestId });
+
+      res.json({
+        success: true,
+        data: {
+          overview,
+          questions,
+          requestId,
+        },
+      });
+    } catch (error) {
+      logger.error("Error processing learning request", {
+        requestId,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      res.status(500).json({
+        success: false,
+        message: "Error generating content",
+        error:
+          process.env.NODE_ENV === "development"
+            ? error.message
+            : "Internal server error",
+      });
     }
+  })
+);
+
+app.post(
+  "/api/evaluateKnowledge",
+  validateKnowledgeEvaluation,
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+
+    const { answers, questions, purpose, topic } = req.body;
+    const requestId = Date.now().toString();
+
+    logger.info("Processing knowledge evaluation", {
+      requestId,
+      topic,
+      purpose,
+    });
+
+    try {
+      // Evaluate score
+      let score = 0;
+      questions.forEach((q, index) => {
+        if (answers[index] === q.correct) {
+          score++;
+        }
+      });
+
+      let knowledgeLevel = "Beginner";
+      const totalQuestions = questions.length;
+      const scorePercentage = (score / totalQuestions) * 100;
+
+      if (scorePercentage >= 80) knowledgeLevel = "Expert";
+      else if (scorePercentage >= 50) knowledgeLevel = "Intermediate";
+
+      // Generate learning path
+      const learningPathMessages = [
+        {
+          role: "system",
+          content:
+            "You are an expert learning path planner. Create a detailed, personalized learning path based on the user's input. Respond in JSON format.",
+        },
+        {
+          role: "user",
+          content: openAIService.generateLearningPathPrompt(
+            topic,
+            purpose,
+            questions,
+            answers,
+            knowledgeLevel
+          ),
+        },
+      ];
+
+      const learningPathResponse = await openAIService.makeRequest(
+        learningPathMessages,
+        config.maxTokens.learningPath
+      );
+
+      const learningPathJson = cleanAndParseJSON(learningPathResponse);
+
+      logger.info("Knowledge evaluation completed", {
+        requestId,
+        score,
+        knowledgeLevel,
+        scorePercentage,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          score,
+          totalQuestions,
+          scorePercentage,
+          knowledgeLevel,
+          learningPath: learningPathJson,
+          requestId,
+        },
+      });
+    } catch (error) {
+      logger.error("Error processing knowledge evaluation", {
+        requestId,
+        error: error.message,
+        stack: error.stack,
+      });
+
+      res.status(500).json({
+        success: false,
+        message: "Error generating learning path",
+        error:
+          process.env.NODE_ENV === "development"
+            ? error.message
+            : "Internal server error",
+      });
+    }
+  })
+);
+
+// Global error handler
+app.use((error, req, res, next) => {
+  logger.error("Unhandled error", {
+    error: error.message,
+    stack: error.stack,
+    path: req.path,
+    method: req.method,
   });
 
-  let knowledgeLevel = "Beginner";
-  if (score >= Math.ceil(questions.length / 2)) knowledgeLevel = "Intermediate";
-  if (score === questions.length) knowledgeLevel = "Expert";
-
-  try {
-    const learningPathMessages = [
-      {
-        role: "system",
-        content:
-          "You are an expert learning path planner. Create a detailed, personalized learning path based on the user's input. Respond in JSON format.",
-      },
-      {
-        role: "user",
-        content: `The user is learning about ${topic} with the objective: ${purpose}.
-        The user answered the following questions:
-        ${questions
-          .map(
-            (q, index) =>
-              `Q${index + 1}: ${q.question}\nAnswer: ${
-                answers[index]
-              }\nCorrect Answer: ${q.correct}\n`
-          )
-          .join("\n")}
-        The user's knowledge level is determined to be: ${knowledgeLevel}.
-        Please provide a detailed, actionable learning path for achieving the objective.
-        
-        sample - 
-        { "learningPath": {
-            "objective": "Learn React",
-            "knowledgeLevel": "Intermediate",
-            "modules": [
-                    {"title": "React Basics"},
-                    {"title": "Advanced React"},
-                ]
-            }
-        }
-        `,
-      },
-    ];
-
-    const learningPathResponse = await axios.post(
-      `${AZURE_OPENAI_ENDPOINT}/openai/deployments/gpt-4o/chat/completions?api-version=2024-12-01-preview`,
-      {
-        messages: learningPathMessages,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "api-key": AZURE_OPENAI_API_KEY,
-        },
-      }
-    );
-
-    const learningPath = learningPathResponse.data.choices[0].message.content
-      .replace(/```json/, "")
-      .replace(/```/, "")
-      .trim();
-    learfningpathjson = JSON.parse(learningPath);
-    console.log("Learning Path Response Data:", learfningpathjson);
-
-    // Return evaluated knowledge and learning path
-    res.json({
-      score,
-      knowledgeLevel,
-      learfningpathjson,
-    });
-  } catch (error) {
-    console.error(
-      "Error generating learning path:",
-      error.message || error.response?.data
-    );
-    res.status(500).json({
-      message: "Error generating learning path",
-      error: error.message || error.response?.data,
-    });
-  }
+  res.status(500).json({
+    success: false,
+    message: "Internal server error",
+    error:
+      process.env.NODE_ENV === "development"
+        ? error.message
+        : "Something went wrong",
+  });
 });
 
-// -------------------------------------
-// Start Server
-// -------------------------------------
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+// Handle 404
+app.use("*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
 });
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  logger.info("SIGTERM received, shutting down gracefully");
+  process.exit(0);
+});
+
+process.on("SIGINT", () => {
+  logger.info("SIGINT received, shutting down gracefully");
+  process.exit(0);
+});
+
+// Start server
+const server = app.listen(config.port, () => {
+  logger.info(`Server running on port ${config.port}`, {
+    environment: process.env.NODE_ENV || "development",
+    port: config.port,
+  });
+});
+
+// Handle server errors
+server.on("error", (error) => {
+  logger.error("Server error", { error: error.message });
+  process.exit(1);
+});
+
+module.exports = app;
