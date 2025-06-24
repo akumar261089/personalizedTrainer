@@ -6,9 +6,7 @@ services:
       context: ./backend
     ports:
       - "5001:5000" # Maps backend port 5000 inside the container to port 5000 on the host
-    environment:
-      - AZURE_OPENAI_API_KEY=key # Make sure to pass your API key
-      - AZURE_OPENAIENDPOINTh=url
+     
     container_name: learning_backend
     restart: always
     networks:
